@@ -1,4 +1,4 @@
-This is an example project using CMake.
+This is an simple webrtc example .
 
 The requirements are:
 
