@@ -17,4 +17,4 @@ target_compile_features(testwebsocketlib PRIVATE cxx_std_17)
 target_link_libraries(testwebsocketlib PRIVATE websocket  Catch2::Catch2)
 
 # If you register a test, then ctest and make test will run it.
-add_test(NAME testwebsocketlib COMMAND testwebsocketlib) 
+add_test(NAME testwebsocketlib COMMAND testwebsocketlib --success)

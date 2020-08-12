@@ -22,3 +22,14 @@ TEST_CASE( "Client Connect pass", "[main]" ) {
 
 }
 
+TEST_CASE( "Client Connect fail", "[main]" ) {
+    Websocket client;
+
+    bool ret = true;
+    ret = client.connect(U("localhost:9091:"));
+
+
+    REQUIRE(ret == false  );
+
+}
+

@@ -20,7 +20,11 @@ bool Websocket::connect(std::string url ){
     }catch(const websocket_exception& ex) {
         std::cout << ex.what()<< std::endl;
         return false;
+    }catch (std::exception& e){
+        std::cout <<  "...... error while connecting to the websocket server: "<< e.what() << '\n';
+        return false;
     }
+
     std::cout << "Connected to the signalling server"<<std::endl;
     return true;
 }
