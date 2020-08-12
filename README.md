@@ -5,6 +5,8 @@ The requirements are:
 * CMake 3.11 or better; 3.14+ highly recommended.
 * A C++17 compatible compiler
 * The Boost libararies (header only part is fine)
+* The cpprestsdk libraries
+* The OpenSSL libraries
 * Git
 * Doxygen (optional)
 
