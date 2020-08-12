@@ -19,8 +19,7 @@ bool Websocket::connect(std::string url ){
         client.connect(U("ws://"+url)).wait();
     }catch(const websocket_exception& ex) {
         std::cout << ex.what()<< std::endl;
-        std::cout << "Hello my world"<<std::endl;
-     //   return false;
+        return false;
     }
     std::cout << "Connected to the signalling server"<<std::endl;
     return true;
