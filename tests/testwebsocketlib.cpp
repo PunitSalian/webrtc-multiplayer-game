@@ -6,17 +6,24 @@
 TEST_CASE( "Client Connect pass", "[main]" ) {
     Websocket client;
 
-    client.connect(U("localhost:9090"));
+    auto r1 = client.connect(U("localhost:9090"));
 
     std::string result;
     auto handler = [&result](websocket_incoming_message msg){
          result = msg.extract_string().get();
     };
+    
     client.setreceivehandler(handler);
-    client.send("Hello world");
+   
+    auto r2 = client.send("Hello world");
+    
     sleep(1);
 
-    client.close();
+
+    REQUIRE( r1  == true );
+
+    REQUIRE( r2  == true );
+
 
     REQUIRE( result  == "Hello world" );
 
@@ -32,4 +39,18 @@ TEST_CASE( "Client Connect fail", "[main]" ) {
     REQUIRE(ret == false  );
 
 }
+
+TEST_CASE( "Client close fail", "[main]" ) { 
+    Websocket client;
+
+    bool ret = true;
+
+    ret = client.close();
+
+
+    REQUIRE(ret == false  );  
+
+}
+
+
 
