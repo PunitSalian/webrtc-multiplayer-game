@@ -6,6 +6,7 @@ project(WEBRTCGAME
     DESCRIPTION "Simple Webrtc LAN game"
     LANGUAGES CXX)
 
+
 # Only do these if this is the main project, and not if it is included through add_subdirectory
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
@@ -50,18 +51,35 @@ find_package(Boost REQUIRED)
 # Adds OpenSSL::Crypto
 find_package(OpenSSL REQUIRED)
 
+find_package(Threads REQUIRED)
+
+find_package(jsoncpp REQUIRED)
+
 #blehhh we need to make sure to set the dir as the  .cmake config doesn't lie in the default search path of cmake 
 set(cpprestsdk_DIR /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/cmake/)
 find_package(cpprestsdk REQUIRED)
 
+#find_library(CURL_LIBRARY NAMES webrtc HINTS  "${WEBRTCGAME_SOURCE_DIR}/local/lib")
+set(MY_PUBLIC_HEADERS "${WEBRTCGAME_SOURCE_DIR}/local/include" "${WEBRTCGAME_SOURCE_DIR}/local/include/third_party/abseil-cpp") 
 
+add_library(webrtc STATIC IMPORTED)
+set_target_properties(webrtc PROPERTIES
+    IMPORTED_LOCATION "${WEBRTCGAME_SOURCE_DIR}/local/lib/libwebrtc.a"
+    PUBLIC_HEADER "${MY_PUBLIC_HEADERS}"
+ )
 
+#set_target_properties(webrtc PROPERTIES PUBLIC_HEADER "${MY_PUBLIC_HEADERS}" )
 
+#include_directories( "${WEBRTCGAME_SOURCE_DIR}/local/include")
+#include_directories("${WEBRTCGAME_SOURCE_DIR}/local/include/third_party/abseil-cpp")
 # The compiled library code is here
+set(CMAKE_CXX_STANDARD 14)
+
+
 add_subdirectory(src)
 
 # The executable code is here
-#add_subdirectory(apps)
+add_subdirectory(apps)
 
 # Testing only available if this is the main app
 # Emergency override MODERN_CMAKE_BUILD_TESTING provided as well
