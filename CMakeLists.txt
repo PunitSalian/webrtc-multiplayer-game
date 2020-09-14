@@ -70,10 +70,9 @@ set_target_properties(webrtc PROPERTIES
 
 #set_target_properties(webrtc PROPERTIES PUBLIC_HEADER "${MY_PUBLIC_HEADERS}" )
 
-#include_directories( "${WEBRTCGAME_SOURCE_DIR}/local/include")
-#include_directories("${WEBRTCGAME_SOURCE_DIR}/local/include/third_party/abseil-cpp")
+include_directories( "${WEBRTCGAME_SOURCE_DIR}/local/include")
+include_directories("${WEBRTCGAME_SOURCE_DIR}/local/include/third_party/abseil-cpp")
 # The compiled library code is here
-set(CMAKE_CXX_STANDARD 14)
 
 
 add_subdirectory(src)

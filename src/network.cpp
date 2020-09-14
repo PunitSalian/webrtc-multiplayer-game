@@ -20,47 +20,79 @@ struct Ice {
   int sdp_mline_index;
 };
 
-class Wrapper : public webrtc::PeerConnectionObserver,
-                public webrtc::CreateSessionDescriptionObserver,
-                public webrtc::SetSessionDescriptionObserver,
-                public webrtc::DataChannelObserver {
+
+WebrtcNetwork::WebrtcNetwork(){}
+WebrtcNetwork::~WebrtcNetwork(){}
+
+bool WebrtcNetwork::InitializePeerConnection(){
+
+}
+
+void WebrtcNetwork::DeletePeerConnection(){
+
+}
 
 
-Wrapper(){}
-~Wrapper(){}
+bool WebrtcNetwork::CreateDataChannel(){
 
-void on_message(const std::string &) {}
+}
 
-// webrtc::PeerConnectionObserver
-// Override signaling change.
-void OnSignalingChange(
-    webrtc::PeerConnectionInterface::SignalingState new_state) override {
+
+bool WebrtcNetwork::CreateOffer(){
+
+}
+
+
+bool WebrtcNetwork::CreateAnswer(){
+
+}
+
+bool WebrtcNetwork::SendDataViaDataChannel(const std::string& data){
+
+
+}
+
+
+// PeerConnectionObserver implementation.
+void WebrtcNetwork::OnSignalingChange(
+    webrtc::PeerConnectionInterface::SignalingState new_state)  {
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::SignalingChange(" << new_state << ")"
             << std::endl;
 }
 
+// Override OnAddStream
+void WebrtcNetwork::OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream)  {
+      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+                << "PeerConnectionObserver::AddStream" << std::endl;
+}
+
+// Override OnRemoveStream
+void WebrtcNetwork::OnRemoveStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream)  {
+      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+                << "PeerConnectionObserver::RemoveStream" << std::endl;
+}
+
 // Override data channel change.
-void OnDataChannel(
-    rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel) override {
+void WebrtcNetwork::OnDataChannel(
+    rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel)  {
   std::cout << ":" << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::DataChannel(" << data_channel << ", "
             << data_channel.get() << ")" << std::endl;
 }
 
 // Override renegotiation.
-void OnRenegotiationNeeded() {
+void WebrtcNetwork::OnRenegotiationNeeded() {
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::RenegotiationNeeded" << std::endl;
 }
 
 // Override ICE connection change.
-void OnIceConnectionChange(
-    webrtc::PeerConnectionInterface::IceConnectionState /* new_state */)override {}
+void WebrtcNetwork::OnIceConnectionChange(
+    webrtc::PeerConnectionInterface::IceConnectionState /* new_state */) {}
 
 // Override ICE gathering change.
-void OnIceGatheringChange(
-    webrtc::PeerConnectionInterface::IceGatheringState new_state) {
+void WebrtcNetwork::OnIceGatheringChange(webrtc::PeerConnectionInterface::IceGatheringState new_state)  {
 
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::IceGatheringChange(" << new_state << ")"
@@ -68,60 +100,53 @@ void OnIceGatheringChange(
 }
 
 // Override ICE candidate.
-void OnIceCandidate(
-    const webrtc::IceCandidateInterface *candidate) override {
+void WebrtcNetwork::OnIceCandidate(
+    const webrtc::IceCandidateInterface *candidate)  {
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::IceCandidate" << std::endl;
 }
 
-// DataChannel events.
-// class DataChannelObserver : public webrtc::DataChannelObserver {
+void WebrtcNetwork::OnIceConnectionReceivingChange(bool receiving){
 
-// Change in state of the Data Channel.
-void OnStateChange() {}
-
-// Message received.
-void OnMessage(const webrtc::DataBuffer &buffer) override{
-  std::string(buffer.data.data<char>(), buffer.data.size());
 }
 
-// Buffered amount change.
-void OnBufferedAmountChange(uint64_t /* previous_amount */) {}
-
-// Create SessionDescription events.
-// : public webrtc::CreateSessionDescriptionObserver {
-
+// CreateSessionDescriptionObserver implementation
 // Successfully created a session description.
-void OnSuccess(webrtc::SessionDescriptionInterface *desc) override {
+void WebrtcNetwork::OnSuccess(webrtc::SessionDescriptionInterface *desc)  {
   peer_connection_->SetLocalDescription(this, desc);
 }
 
 // Failure to create a session description.
-void OnFailure(webrtc::RTCError error) override {
-  std::cout << name << ":" << std::this_thread::get_id() << ":"
+void WebrtcNetwork::OnFailure(webrtc::RTCError error)  {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
             << "CreateSessionDescriptionObserver::OnFailure" << std::endl
             << error.message() << std::endl;
 }
 
-// Set SessionDescription events.
-//  : public webrtc::SetSessionDescriptionObserver {
-
+// SetSessionDescriptionObserver implementation
 // Successfully set a session description.
-void OnSuccess() override {
-  std::cout << name << ":" << std::this_thread::get_id() << ":"
+void WebrtcNetwork::OnSuccess()  {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
             << "SetSessionDescriptionObserver::OnSuccess" << std::endl;
 }
-private:
 
-  rtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection_;
-  rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
-  std::string name;
 
-};
+// DataChannelObserver implementation.
+void WebrtcNetwork::OnStateChange(){
+      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+                      << "DataChannelObserver::StateChange" << std::endl;
+}
+
+void WebrtcNetwork::OnMessage(const webrtc::DataBuffer& buffer){
+std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+                << "DataChannelObserver::Message" << std::endl;
+}
+
+
 /*
-class Wrapper {
+class WebrtcNetwork {
 public:
-  Wrapper(const std::string name_,Websocket* ws) : name(name_),ws_(ws),
+  WebrtcNetwork(const std::string name_,Websocket* ws) : name(name_),ws_(ws),
 connection(name_) {}
 
   void init() {
@@ -276,7 +301,7 @@ void Game_network::connect(std::string player1name, std::string player2name) {
     bs->send(strJson);
   }
 
-  Wrapper w("webrtc conection");
+  WebrtcNetwork w("webrtc conection");
 
   w.init();
 
