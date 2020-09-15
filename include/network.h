@@ -2,19 +2,15 @@
 #define NETWORK_H
 
 #include <iostream>
-
 #include <vector>
 #include <string>
 #include <map>
 #include <memory>
-
 #include <api/create_peerconnection_factory.h>
-
 #include <api/data_channel_interface.h>
 #include <api/media_stream_interface.h>
 #include <api/peer_connection_interface.h>
-
-
+#include <websocket.h> 
 class WebrtcNetwork :public webrtc::PeerConnectionObserver,
                      public webrtc::CreateSessionDescriptionObserver,
                      public webrtc::SetSessionDescriptionObserver,
@@ -26,7 +22,7 @@ class WebrtcNetwork :public webrtc::PeerConnectionObserver,
   void DeletePeerConnection();
   bool CreateDataChannel();
   bool CreateOffer();
-  bool CreateAnswer();
+  bool CreateAnswer(const std::string &parameter);
   bool SendDataViaDataChannel(const std::string& data);
   
   
@@ -73,6 +69,12 @@ class WebrtcNetwork :public webrtc::PeerConnectionObserver,
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection_;
   rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_;
   std::string name_;
+  static rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> peer_connection_factory;
+  static std::unique_ptr<rtc::Thread> network_thread;
+  static std::unique_ptr<rtc::Thread> worker_thread;
+  static std::unique_ptr<rtc::Thread> signaling_thread;
+  static webrtc::PeerConnectionInterface::RTCConfiguration configuration;
+  static Websocket* ws_;
   // disallow copy-and-assign
   WebrtcNetwork(const WebrtcNetwork&) = delete;
   WebrtcNetwork& operator=(const WebrtcNetwork&) = delete;

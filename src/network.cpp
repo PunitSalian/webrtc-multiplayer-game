@@ -1,81 +1,141 @@
-#include <condition_variable>
 #include <iostream>
 #include <list>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <thread>
 
-#include <api/create_peerconnection_factory.h>
 #include <network.h>
-#include <rtc_base/ssl_adapter.h>
-#include <rtc_base/strings/json.h>
-#include <rtc_base/thread.h>
-#include <system_wrappers/include/field_trial.h>
-#include <websocket.h>
-
+namespace {
 struct Ice {
   std::string candidate;
   std::string sdp_mid;
   int sdp_mline_index;
 };
+} // namespace
 
+rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
+    WebrtcNetwork::peer_connection_factory = nullptr;
 
-WebrtcNetwork::WebrtcNetwork(){}
-WebrtcNetwork::~WebrtcNetwork(){}
+WebrtcNetwork::WebrtcNetwork() {}
+WebrtcNetwork::~WebrtcNetwork() {}
 
-bool WebrtcNetwork::InitializePeerConnection(){
+bool WebrtcNetwork::InitializePeerConnection() {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "init Main thread" << std::endl;
 
+  // Using Google's STUN server.
+  if (peer_connection_factory == nullptr) {
+    webrtc::PeerConnectionInterface::IceServer ice_server;
+    ice_server.uri = "stun:stun.l.google.com:19302";
+    configuration.servers.push_back(ice_server);
+
+    network_thread = rtc::Thread::CreateWithSocketServer();
+    network_thread->Start();
+    worker_thread = rtc::Thread::Create();
+    worker_thread->Start();
+    signaling_thread = rtc::Thread::Create();
+    signaling_thread->Start();
+    webrtc::PeerConnectionFactoryDependencies dependencies;
+    dependencies.network_thread = network_thread.get();
+    dependencies.worker_thread = worker_thread.get();
+    dependencies.signaling_thread = signaling_thread.get();
+    peer_connection_factory =
+        webrtc::CreateModularPeerConnectionFactory(std::move(dependencies));
+
+    if (peer_connection_factory.get() == nullptr) {
+      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+                << "Error on CreateModularPeerConnectionFactory." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
 }
 
-void WebrtcNetwork::DeletePeerConnection(){
+void WebrtcNetwork::DeletePeerConnection() {}
 
+bool WebrtcNetwork::CreateDataChannel() {}
+
+bool WebrtcNetwork::CreateOffer() {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "create_offer_sdp" << std::endl;
+
+  peer_connection_ = peer_connection_factory->CreatePeerConnection(
+      configuration, nullptr, nullptr, this);
+
+  webrtc::DataChannelInit config;
+
+  // Configuring DataChannel.
+  data_channel_ = peer_connection_->CreateDataChannel("data_channel", &config);
+  data_channel_->RegisterObserver(this);
+
+  if (peer_connection_.get() == nullptr) {
+    peer_connection_factory = nullptr;
+    std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+              << "Error on CreatePeerConnection." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  peer_connection_->CreateOffer(
+      this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
 }
 
+bool WebrtcNetwork::CreateAnswer(const std::string &parameter) {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "create_answer_sdp" << std::endl;
 
-bool WebrtcNetwork::CreateDataChannel(){
+  peer_connection_ = peer_connection_factory->CreatePeerConnection(
+      configuration, nullptr, nullptr, this);
 
+  if (peer_connection_.get() == nullptr) {
+    peer_connection_factory = nullptr;
+    std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+              << "Error on CreatePeerConnection." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  webrtc::SdpParseError error;
+  webrtc::SessionDescriptionInterface *session_description(
+      webrtc::CreateSessionDescription("offer", parameter, &error));
+  if (session_description == nullptr) {
+    std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+              << "Error on CreateSessionDescription." << std::endl
+              << error.line << std::endl
+              << error.description << std::endl;
+    std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+              << "Offer SDP:begin" << std::endl
+              << parameter << std::endl
+              << "Offer SDP:end" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  peer_connection_->SetRemoteDescription(this, session_description);
+  peer_connection_->CreateAnswer(
+      this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
 }
 
-
-bool WebrtcNetwork::CreateOffer(){
-
-}
-
-
-bool WebrtcNetwork::CreateAnswer(){
-
-}
-
-bool WebrtcNetwork::SendDataViaDataChannel(const std::string& data){
-
-
-}
-
+bool WebrtcNetwork::SendDataViaDataChannel(const std::string &data) {}
 
 // PeerConnectionObserver implementation.
 void WebrtcNetwork::OnSignalingChange(
-    webrtc::PeerConnectionInterface::SignalingState new_state)  {
+    webrtc::PeerConnectionInterface::SignalingState new_state) {
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::SignalingChange(" << new_state << ")"
             << std::endl;
 }
 
 // Override OnAddStream
-void WebrtcNetwork::OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream)  {
-      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
-                << "PeerConnectionObserver::AddStream" << std::endl;
+void WebrtcNetwork::OnAddStream(
+    rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "PeerConnectionObserver::AddStream" << std::endl;
 }
 
 // Override OnRemoveStream
-void WebrtcNetwork::OnRemoveStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream)  {
-      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
-                << "PeerConnectionObserver::RemoveStream" << std::endl;
+void WebrtcNetwork::OnRemoveStream(
+    rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "PeerConnectionObserver::RemoveStream" << std::endl;
 }
 
 // Override data channel change.
 void WebrtcNetwork::OnDataChannel(
-    rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel)  {
+    rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel) {
   std::cout << ":" << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::DataChannel(" << data_channel << ", "
             << data_channel.get() << ")" << std::endl;
@@ -92,7 +152,8 @@ void WebrtcNetwork::OnIceConnectionChange(
     webrtc::PeerConnectionInterface::IceConnectionState /* new_state */) {}
 
 // Override ICE gathering change.
-void WebrtcNetwork::OnIceGatheringChange(webrtc::PeerConnectionInterface::IceGatheringState new_state)  {
+void WebrtcNetwork::OnIceGatheringChange(
+    webrtc::PeerConnectionInterface::IceGatheringState new_state) {
 
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::IceGatheringChange(" << new_state << ")"
@@ -101,23 +162,25 @@ void WebrtcNetwork::OnIceGatheringChange(webrtc::PeerConnectionInterface::IceGat
 
 // Override ICE candidate.
 void WebrtcNetwork::OnIceCandidate(
-    const webrtc::IceCandidateInterface *candidate)  {
+    const webrtc::IceCandidateInterface *candidate) {
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::IceCandidate" << std::endl;
 }
 
-void WebrtcNetwork::OnIceConnectionReceivingChange(bool receiving){
-
-}
+void WebrtcNetwork::OnIceConnectionReceivingChange(bool receiving) {}
 
 // CreateSessionDescriptionObserver implementation
 // Successfully created a session description.
-void WebrtcNetwork::OnSuccess(webrtc::SessionDescriptionInterface *desc)  {
+void WebrtcNetwork::OnSuccess(webrtc::SessionDescriptionInterface *desc) {
   peer_connection_->SetLocalDescription(this, desc);
+  std::string sdp;
+  desc->ToString(&sdp);
+  std::cout << " sdp:begin" << std::endl << sdp << " sdp:end" << std::endl;
+  ws_->send(sdp);
 }
 
 // Failure to create a session description.
-void WebrtcNetwork::OnFailure(webrtc::RTCError error)  {
+void WebrtcNetwork::OnFailure(webrtc::RTCError error) {
   std::cout << name_ << ":" << std::this_thread::get_id() << ":"
             << "CreateSessionDescriptionObserver::OnFailure" << std::endl
             << error.message() << std::endl;
@@ -125,23 +188,21 @@ void WebrtcNetwork::OnFailure(webrtc::RTCError error)  {
 
 // SetSessionDescriptionObserver implementation
 // Successfully set a session description.
-void WebrtcNetwork::OnSuccess()  {
+void WebrtcNetwork::OnSuccess() {
   std::cout << name_ << ":" << std::this_thread::get_id() << ":"
             << "SetSessionDescriptionObserver::OnSuccess" << std::endl;
 }
 
-
 // DataChannelObserver implementation.
-void WebrtcNetwork::OnStateChange(){
-      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
-                      << "DataChannelObserver::StateChange" << std::endl;
+void WebrtcNetwork::OnStateChange() {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "DataChannelObserver::StateChange" << std::endl;
 }
 
-void WebrtcNetwork::OnMessage(const webrtc::DataBuffer& buffer){
-std::cout << name_ << ":" << std::this_thread::get_id() << ":"
-                << "DataChannelObserver::Message" << std::endl;
+void WebrtcNetwork::OnMessage(const webrtc::DataBuffer &buffer) {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "DataChannelObserver::Message" << std::endl;
 }
-
 
 /*
 class WebrtcNetwork {
