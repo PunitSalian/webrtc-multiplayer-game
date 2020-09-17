@@ -5,22 +5,59 @@
 #include <thread>
 
 #include <network.h>
+#include <rtc_base/strings/json.h>
 namespace {
 struct Ice {
   std::string candidate;
   std::string sdp_mid;
   int sdp_mline_index;
 };
+
+static std::unordered_map<std::string, rtc::scoped_refptr<WebrtcNetwork>>
+    connections;
+
+static Websocket ws_;
+
+void OnWebSocketMessage(websocket_incoming_message msg) {
+
+  auto strJson = msg.extract_string().get();
+  Json::Value root;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(strJson.c_str(), root); // parse process
+
+  if (!parsingSuccessful) {
+    std::cout << "Bad parsing " << std::endl;
+    return;
+  }
+  std::cout << strJson << std::endl;
+
+  auto type = root["type"].asString();
+
+  if (type == "offer") {
+    auto offerdata = root["data"].asString();
+    auto name = root["name"].asString();
+    GameNetwork::NewConnection(name, offerdata);
+  } else if (type == "candidate") {
+
+  } else if (type == "candidate") {
+  }
+}
+
 } // namespace
 
 rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
     WebrtcNetwork::peer_connection_factory = nullptr;
 
-WebrtcNetwork::WebrtcNetwork() {}
-WebrtcNetwork::~WebrtcNetwork() {}
+WebrtcNetwork::WebrtcNetwork(std::string name) : name_(name) {}
+WebrtcNetwork::~WebrtcNetwork() {
+  network_thread->Stop();
+  worker_thread->Stop();
+  signaling_thread->Stop();
+}
 
 bool WebrtcNetwork::InitializePeerConnection() {
-  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+
+  std::cout << ":" << std::this_thread::get_id() << ":"
             << "init Main thread" << std::endl;
 
   // Using Google's STUN server.
@@ -43,16 +80,18 @@ bool WebrtcNetwork::InitializePeerConnection() {
         webrtc::CreateModularPeerConnectionFactory(std::move(dependencies));
 
     if (peer_connection_factory.get() == nullptr) {
-      std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+      std::cout << ":" << std::this_thread::get_id() << ":"
                 << "Error on CreateModularPeerConnectionFactory." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
 }
 
-void WebrtcNetwork::DeletePeerConnection() {}
-
-bool WebrtcNetwork::CreateDataChannel() {}
+void WebrtcNetwork::DeletePeerConnection() {
+  CloseDataChannel();
+  peer_connection_->Close();
+  peer_connection_ = nullptr;
+}
 
 bool WebrtcNetwork::CreateOffer() {
   std::cout << name_ << ":" << std::this_thread::get_id() << ":"
@@ -109,7 +148,23 @@ bool WebrtcNetwork::CreateAnswer(const std::string &parameter) {
       this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
 }
 
-bool WebrtcNetwork::SendDataViaDataChannel(const std::string &data) {}
+bool WebrtcNetwork::SendDataViaDataChannel(const std::string &data) {
+  if (!data_channel_.get()) {
+    std::cout << "Data channel is not established" << std::endl;
+    return false;
+  }
+  webrtc::DataBuffer buffer(data);
+  data_channel_->Send(buffer);
+  return true;
+}
+
+void WebrtcNetwork::CloseDataChannel() {
+  if (data_channel_.get()) {
+    data_channel_->UnregisterObserver();
+    data_channel_->Close();
+  }
+  data_channel_ = nullptr;
+}
 
 // PeerConnectionObserver implementation.
 void WebrtcNetwork::OnSignalingChange(
@@ -139,6 +194,10 @@ void WebrtcNetwork::OnDataChannel(
   std::cout << ":" << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::DataChannel(" << data_channel << ", "
             << data_channel.get() << ")" << std::endl;
+
+  data_channel_ = data_channel;
+
+  data_channel_->RegisterObserver(this);
 }
 
 // Override renegotiation.
@@ -149,7 +208,11 @@ void WebrtcNetwork::OnRenegotiationNeeded() {
 
 // Override ICE connection change.
 void WebrtcNetwork::OnIceConnectionChange(
-    webrtc::PeerConnectionInterface::IceConnectionState /* new_state */) {}
+    webrtc::PeerConnectionInterface::IceConnectionState new_state) {
+  std::cout << name_ << ":" << std::this_thread::get_id() << ":"
+            << "PeerConnectionObserver::IceConnectionChange(" << new_state
+            << ")" << std::endl;
+}
 
 // Override ICE gathering change.
 void WebrtcNetwork::OnIceGatheringChange(
@@ -165,6 +228,27 @@ void WebrtcNetwork::OnIceCandidate(
     const webrtc::IceCandidateInterface *candidate) {
   std::cout << std::this_thread::get_id() << ":"
             << "PeerConnectionObserver::IceCandidate" << std::endl;
+  Ice ice;
+  candidate->ToString(&ice.candidate);
+  ice.sdp_mid = candidate->sdp_mid();
+  ice.sdp_mline_index = candidate->sdp_mline_index();
+
+  Json::Value icedata;
+  Json::Value candidatedata;
+  icedata["type"] = "candidate";
+  icedata["name"] = name_;
+
+  candidatedata["candidate"] = ice.candidate;
+
+  candidatedata["sdpMid"] = ice.sdp_mid;
+
+  candidatedata["sdpMLineIndex"] = ice.sdp_mline_index;
+
+  icedata["candidate"] = candidatedata;
+  Json::StyledWriter writer;
+  std::string strJson = writer.write(icedata);
+  std::cout << "JSON icecandidate" << std::endl << strJson << std::endl;
+  ws_.send(strJson);
 }
 
 void WebrtcNetwork::OnIceConnectionReceivingChange(bool receiving) {}
@@ -176,7 +260,7 @@ void WebrtcNetwork::OnSuccess(webrtc::SessionDescriptionInterface *desc) {
   std::string sdp;
   desc->ToString(&sdp);
   std::cout << " sdp:begin" << std::endl << sdp << " sdp:end" << std::endl;
-  ws_->send(sdp);
+  ws_.send(sdp);
 }
 
 // Failure to create a session description.
@@ -188,6 +272,7 @@ void WebrtcNetwork::OnFailure(webrtc::RTCError error) {
 
 // SetSessionDescriptionObserver implementation
 // Successfully set a session description.
+
 void WebrtcNetwork::OnSuccess() {
   std::cout << name_ << ":" << std::this_thread::get_id() << ":"
             << "SetSessionDescriptionObserver::OnSuccess" << std::endl;
@@ -202,6 +287,41 @@ void WebrtcNetwork::OnStateChange() {
 void WebrtcNetwork::OnMessage(const webrtc::DataBuffer &buffer) {
   std::cout << name_ << ":" << std::this_thread::get_id() << ":"
             << "DataChannelObserver::Message" << std::endl;
+}
+
+bool GameNetwork::NetworkInit() {
+  ws_.setreceivehandler(OnWebSocketMessage);
+
+  if (ws_.connect(U("localhost:9090")) == FAILURE) {
+    return false;
+  }
+
+  return WebrtcNetwork::InitializePeerConnection();
+}
+
+bool GameNetwork::Connect(std::vector<std::string> &peers) {
+  for (auto &name : peers) {
+    connections[name] = new rtc::RefCountedObject<WebrtcNetwork>(name);
+    connections[name]->CreateOffer();
+  }
+}
+
+void GameNetwork::NewConnection(std::string &name, std::string &offer) {
+  connections[name] = new rtc::RefCountedObject<WebrtcNetwork>(name);
+  connections[name]->CreateAnswer(offer);
+}
+void GameNetwork::Senddata(std::string &name, std::string &data) {
+  connections[name]->SendDataViaDataChannel(data);
+}
+
+void GameNetwork::Disconnect(std::vector<std::string> &peers) {
+
+  for (auto &name : peers) {
+
+    if (connections.count(name) > 0) {
+      connections[name]->DeletePeerConnection();
+    }
+  }
 }
 
 /*
